@@ -1,0 +1,29 @@
+#!/bin/bash
+set -e
+
+source $(dirname $0)/version
+
+cd $(dirname $0)/..
+
+mkdir -p bin
+[ "$(uname)" != "Darwin" ] && LINKFLAGS="-extldflags -static -s"
+
+if echo "$VERSION" | grep -q -e '^v.*' ; then 
+    UI_INDEX="local"
+fi
+UI_INDEX=${UI_INDEX:-"https://releases.rancher.com/ui/latest-2.4/index.html"}
+RKE_VERSION="$(grep -m1 'github.com/rancher/rke' go.mod | awk '{print $2}')"
+
+# Inject Setting values
+DEFAULT_VALUES="{\"ui-index\":\"${UI_INDEX}\",\"rke-version\":\"${RKE_VERSION}\"}"
+
+GO111MODULE=on CGO_ENABLED=0 go build -i -tags k8s \
+  -ldflags \
+  "-X github.com/rancher/rancher/pkg/version.Version=$VERSION
+   -X github.com/rancher/rancher/pkg/version.GitCommit=$COMMIT
+   -X github.com/rancher/rancher/pkg/settings.InjectDefaults=$DEFAULT_VALUES $LINKFLAGS" \
+  -o bin/rancher
+
+if  [ -n "$RANCHER_METADATA_BRANCH" ]; then
+    curl -sLf https://releases.rancher.com/kontainer-driver-metadata/${RANCHER_METADATA_BRANCH}/data.json > bin/data.json
+fi
